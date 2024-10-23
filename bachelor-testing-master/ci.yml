@@ -1,0 +1,59 @@
+stages:
+  - build
+  - clean
+  - testing
+
+build_and_run_dockerfile:
+  image: docker:latest
+  services:
+    - name: docker:dind
+      command: ["--mtu=1400"]
+  stage: build
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+#this script fetches the file sent from the branch that triggered the pipeline
+#the files are then temporarily merged with master, and docker compose is run using the sender dockerfile and the dockerfile from-
+#the branch that triggered the job
+#the logs from docker compose are stored in a file and used in later stages.
+  script:
+    - git fetch origin $TRIGGER_SOURCE_BRANCH
+    - git fetch origin master
+    - git merge --no-commit --allow-unrelated-histories --no-ff origin/$TRIGGER_SOURCE_BRANCH || true
+    - mkdir -p ids
+    - git --work-tree=./ checkout origin/$TRIGGER_SOURCE_BRANCH -- ids/
+    - mkdir -p logs
+    - docker compose up --abort-on-container-exit > logs/logs.txt 2>&1 
+    - sed -i "s/'/\"/g" logs/logs.txt  #it is necessary to convert single quotes to double quotes
+  artifacts:
+    paths:
+      - logs/
+  only:
+    variables:
+      - $TRIGGER_SOURCE_BRANCH
+
+fix_file:
+  image: python:latest
+  stage: clean
+#a python script is ran which extracts json data from the docker compose logs
+  script:
+    - python clean_logs.py 
+  dependencies:
+    - build_and_run_dockerfile
+  artifacts:
+    paths:
+      - logs/ 
+    when: always
+
+
+pytest_job:
+  image: python:latest
+  stage: testing
+  #finally, we test the files
+  script:
+    - pip install --no-cache-dir -r requirements.txt --default-timeout=200
+    - pytest -v test_IDS.py --color=yes
+  dependencies:
+    - build_and_run_dockerfile
+    - fix_file
+
