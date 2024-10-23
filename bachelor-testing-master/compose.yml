@@ -1,0 +1,31 @@
+services:
+  ids_container:
+    build:
+      context: ids/
+      dockerfile: Dockerfile
+    #Ensuring that python is flushing stdout in order to print to logs
+    environment:
+     - PYTHONUNBUFFERED=1
+    networks:
+      network:
+        ipv4_address: 10.5.0.9
+
+  sender:
+    build:
+      context: sender/
+      dockerfile: Dockerfile
+    environment:
+     - PYTHONUNBUFFERED=1
+    networks:
+      - network
+    # Only start after the ids container has started
+    depends_on:
+      ids_container:
+        condition: service_started
+
+networks:
+  network:
+    ipam:
+      config:
+        - subnet: 10.5.0.0/16
+          gateway: 10.5.0.1
