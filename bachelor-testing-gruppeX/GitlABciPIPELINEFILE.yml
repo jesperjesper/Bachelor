@@ -1,0 +1,18 @@
+stages:
+  - trigger
+
+
+trigger_master_pipeline:
+  stage: trigger
+  image: curlimages/curl:latest
+  script:
+    - >
+      curl --request POST 
+      --form token=$MASTER_TRIGGER_TOKEN
+      --form ref=master
+      --form variables[TRIGGER_SOURCE_BRANCH]=$CI_COMMIT_REF_NAME
+      "https://gitlab.internal.uia.no/api/v4/projects/$CI_PROJECT_ID/trigger/pipeline"
+
+  timeout: 1 minute
+
+      
